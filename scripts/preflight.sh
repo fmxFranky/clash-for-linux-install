@@ -463,6 +463,7 @@ _set_envs() {
     _set_env INIT_TYPE "$INIT_TYPE"
     _set_env KERNEL_NAME "$KERNEL_NAME"
     _set_env CLASH_BASE_DIR "$CLASH_BASE_DIR"
+    _set_env CLASH_CONFIG_URL "$CLASH_CONFIG_URL"
     _set_env VERSION_MIHOMO "$VERSION_MIHOMO"
 }
 
