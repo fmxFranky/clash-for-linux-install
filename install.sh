@@ -11,7 +11,7 @@ CLASH_INSTALL_DONE=false
 _cleanup_batch_install() {
     [ "$CLASH_INSTALL_BATCH" = true ] || return 0
     [ "$CLASH_INSTALL_DONE" = true ] && return 0
-    [ -d "$CLASH_BASE_DIR" ] && /usr/bin/rm -rf "$CLASH_BASE_DIR"
+    [ -d "$CLASH_BASE_DIR" ] && rm -rf "$CLASH_BASE_DIR"
 }
 trap _cleanup_batch_install EXIT
 

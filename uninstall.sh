@@ -10,7 +10,7 @@ _revoke_rc
 
 command -v crontab >&/dev/null && crontab -l | grep -v "clashsub" | crontab -
 
-/usr/bin/rm -rf "$CLASH_BASE_DIR"
+rm -rf "$CLASH_BASE_DIR"
 
 echo '✨' '已卸载，相关配置已清除'
 _quit
