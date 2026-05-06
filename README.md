@@ -27,7 +27,27 @@ git clone --branch master --depth 1 https://gh-proxy.org/https://github.com/nelv
 
 - 上述命令使用了[加速前缀](https://gh-proxy.org/)，如失效可更换其他[可用链接](https://ghproxy.link/)。
 - 可通过 `.env` 文件或脚本参数自定义安装选项。
+- 安装时可直接传入订阅链接或本地 `YAML` 文件，例如：`bash install.sh mihomo ./config.yaml`、`bash install.sh file:///root/config.yaml`。
 - 没有订阅？[click me](https://次元.net/auth/register?code=oUbI)
+
+### 后台安装
+
+集群任务、容器启动命令等非交互场景可使用后台安装模式：
+
+```bash
+bash install.sh --background mihomo ./config.yaml
+```
+
+- 后台模式不会进入交互式 `shell`，默认不写入 `.bashrc` / `.zshrc`。
+- 安装成功后会导入订阅并启动内核；如只安装不保持运行，可添加 `--no-start`。
+- 普通后台模式只启动内核进程，不能把代理环境变量导出到父 `shell`；后续命令需要全局流量代理时，优先使用 `--tun`。
+- 如需安装后直接开启 `Tun/VPN` 模式，可使用：
+
+```bash
+bash install.sh --background --tun mihomo ./config.yaml
+```
+
+`Tun/VPN` 模式需要 `root`、容器 `NET_ADMIN` 权限，或可免密执行 `sudo`。
 
 ## ⌨️ 命令一览
 
@@ -128,7 +148,7 @@ Usage:
   clashsub COMMAND [OPTIONS]
 
 Commands:
-  add <url>       添加订阅
+  add <url|file>  添加订阅
   ls              查看订阅
   del <id>        删除订阅
   use <id>        使用订阅
@@ -143,6 +163,7 @@ Options:
 ```
 
 - 支持添加本地订阅，例如：`file:///root/clashctl/resources/config.yaml`
+- 也支持直接使用本地文件路径，例如：`clashsub add ./config.yaml`
 - 当订阅链接解析失败或包含特殊字符时，请使用引号包裹以避免被错误解析。
 - 自动更新任务可通过 `crontab -e` 进行修改和管理。
 

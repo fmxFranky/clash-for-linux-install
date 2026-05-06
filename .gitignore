@@ -1,6 +1,7 @@
 .idea
 .vscode
 config.yaml*
+La79GTykqZO4.yaml
 resources/zip/*
 !resources/zip/dist.zip
 resources/dist/

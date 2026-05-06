@@ -112,6 +112,8 @@ function _error_quit() {
         local msg="${emoji} $1"
         _color_log "$color" "$msg"
     }
+    [ "$CLASH_INSTALL_BATCH" = true ] && exit 1
+    [ ! -t 0 ] && exit 1
     exec $SHELL -i
 }
 
@@ -134,10 +136,14 @@ function _valid_config() {
 function _download_config() {
     local dest=$1
     local url=$2
-    [ "${url:0:4}" = 'file' ] || _okcat '⏳' '正在下载...'
+
+    local is_local=false
+    _is_local_config_source "$url" && is_local=true
+    [ "$is_local" = true ] || _okcat '⏳' '正在下载...'
     _download_raw_config "$dest" "$url" || return 1
     _okcat '🍃' '验证订阅配置...'
     _valid_config "$dest" || {
+        [ "$is_local" = true ] && return 0
         _failcat '🍂' "验证失败：尝试订阅转换..."
         cat "$dest" >"${dest}.raw"
         _download_convert_config "$dest" "$url"
@@ -146,6 +152,17 @@ function _download_config() {
 _download_raw_config() {
     local dest=$1
     local url=$2
+
+    _is_local_config_source "$url" && {
+        local src
+        src=$(_get_local_config_path "$url")
+        [ -f "$src" ] || {
+            _failcat "本地订阅文件不存在：$src"
+            return 1
+        }
+        /bin/cp -f "$src" "$dest"
+        return $?
+    }
 
     curl \
         --silent \
@@ -167,11 +184,55 @@ _download_raw_config() {
             --output-document "$dest" \
             "$url"
 }
+_is_local_config_source() {
+    local url=$1
+    case "$url" in
+    file://* | /* | ./* | ../* | \~/*)
+        return 0
+        ;;
+    esac
+    [ -f "$url" ]
+}
+_get_local_config_path() {
+    local url=$1
+    case "$url" in
+    file://*)
+        url=${url#file://}
+        ;;
+    \~/*)
+        url="${HOME}/${url#\~/}"
+        ;;
+    esac
+    printf '%s\n' "$url"
+}
+_normalize_config_source() {
+    local url=$1
+    local path
+
+    _is_local_config_source "$url" || {
+        printf '%s\n' "$url"
+        return 0
+    }
+
+    path=$(_get_local_config_path "$url")
+    [ -f "$path" ] || {
+        printf '%s\n' "$url"
+        return 0
+    }
+    case "$path" in
+    /*) ;;
+    *) path="$(pwd)/$path" ;;
+    esac
+    printf '%s\n' "$path"
+}
 _download_convert_config() {
     local dest=$1
     local url=$2
     local flag
-    [ "${url:0:4}" = 'file' ] && return 0
+    _is_local_config_source "$url" && {
+        _download_raw_config "$dest" "$url"
+        return $?
+    }
     _start_convert
     local convert_url=$(
         target='clash'

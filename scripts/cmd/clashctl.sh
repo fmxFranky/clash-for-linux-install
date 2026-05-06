@@ -38,6 +38,17 @@ _unset_system_proxy() {
     unset no_proxy
     unset NO_PROXY
 }
+_sudo_cmd() {
+    [ "$(id -u)" -eq 0 ] && {
+        "$@"
+        return $?
+    }
+    [ "$CLASH_INSTALL_BATCH" = true ] && {
+        sudo -n "$@"
+        return $?
+    }
+    sudo "$@"
+}
 _detect_proxy_port() {
     local mixed_port=$("$BIN_YQ" '.mixed-port // ""' "$CLASH_CONFIG_RUNTIME")
     local http_port=$("$BIN_YQ" '.port // ""' "$CLASH_CONFIG_RUNTIME")
@@ -330,7 +341,7 @@ _tunstatus() {
 }
 _tunoff() {
     _tunstatus >/dev/null || return 0
-    sudo placeholder_stop
+    _sudo_cmd placeholder_stop
     # 强制恢复终端输出处理
     stty opost 2>/dev/null
     clashstatus >&/dev/null || {
@@ -343,7 +354,7 @@ _tunoff() {
     _tunstatus >&/dev/null && _failcat "Tun 模式关闭失败"
 }
 _sudo_restart() {
-    sudo placeholder_stop
+    _sudo_cmd placeholder_stop
     placeholder_sudo_start
     sleep 0.5
     # 强制恢复终端输出处理
@@ -351,7 +362,7 @@ _sudo_restart() {
 }
 _tunon() {
     _tunstatus 2>/dev/null && return 0
-    sudo placeholder_stop
+    _sudo_cmd placeholder_stop
     "$BIN_YQ" -i '.tun.enable = true' "$CLASH_CONFIG_MIXIN"
     _merge_config
     placeholder_sudo_start
@@ -538,7 +549,7 @@ Usage:
   clashsub COMMAND [OPTIONS]
 
 Commands:
-  add <url>       添加订阅
+  add <url|file>  添加订阅
   ls              查看订阅
   del <id>        删除订阅
   use <id>        使用订阅
@@ -556,13 +567,14 @@ EOF
 _sub_add() {
     local url=$1
     [ -z "$url" ] && {
-        echo -n "$(_okcat '✈️ ' '请输入要添加的订阅链接：')"
+        echo -n "$(_okcat '✈️ ' '请输入要添加的订阅链接或文件路径：')"
         read -r url
-        [ -z "$url" ] && _error_quit "订阅链接不能为空"
+        [ -z "$url" ] && _error_quit "订阅不能为空"
     }
+    url=$(_normalize_config_source "$url")
     _get_url_by_id "$id" >/dev/null && _error_quit "该订阅链接已存在"
 
-    _download_config "$CLASH_CONFIG_TEMP" "$url"
+    _download_config "$CLASH_CONFIG_TEMP" "$url" || _error_quit "订阅获取失败：$url"
     _valid_config "$CLASH_CONFIG_TEMP" || _error_quit "订阅无效，请检查：
     原始订阅：${CLASH_CONFIG_TEMP}.raw
     转换订阅：$CLASH_CONFIG_TEMP
@@ -657,10 +669,16 @@ _sub_update() {
     _okcat "✈️ " "更新订阅：[$id] $url"
 
     [ "$is_convert" = true ] && {
-        _download_convert_config "$CLASH_CONFIG_TEMP" "$url"
+        _download_convert_config "$CLASH_CONFIG_TEMP" "$url" || {
+            _logging_sub "❌ 订阅更新失败：[$id] $url"
+            _error_quit "订阅获取失败：$url"
+        }
     }
     [ "$is_convert" != true ] && {
-        _download_config "$CLASH_CONFIG_TEMP" "$url"
+        _download_config "$CLASH_CONFIG_TEMP" "$url" || {
+            _logging_sub "❌ 订阅更新失败：[$id] $url"
+            _error_quit "订阅获取失败：$url"
+        }
     }
     _valid_config "$CLASH_CONFIG_TEMP" || {
         _logging_sub "❌ 订阅更新失败：[$id] $url"

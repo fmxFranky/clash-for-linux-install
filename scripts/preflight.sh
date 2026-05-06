@@ -35,17 +35,98 @@ _valid() {
     [ -z "$ZSH_VERSION" ] && [ -z "$BASH_VERSION" ] && _error_quit "仅支持：bash、zsh 执行"
 }
 
+_install_7z() {
+    command -v 7z >&/dev/null && return 0
+
+    _okcat '⏳' '未检测到 7z，尝试安装...'
+
+    if command -v apt-get >&/dev/null; then
+        _sudo_cmd apt-get update &&
+            _sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get install -y p7zip-full ||
+            _sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get install -y 7zip
+    elif command -v dnf >&/dev/null; then
+        _sudo_cmd dnf install -y p7zip p7zip-plugins ||
+            _sudo_cmd dnf install -y 7zip
+    elif command -v yum >&/dev/null; then
+        _sudo_cmd yum install -y p7zip p7zip-plugins
+    elif command -v apk >&/dev/null; then
+        _sudo_cmd apk add --no-cache p7zip
+    elif command -v pacman >&/dev/null; then
+        _sudo_cmd pacman -Sy --noconfirm p7zip ||
+            _sudo_cmd pacman -Sy --noconfirm 7zip
+    elif command -v zypper >&/dev/null; then
+        _sudo_cmd zypper --non-interactive install p7zip-full ||
+            _sudo_cmd zypper --non-interactive install p7zip
+    else
+        _error_quit "未检测到 7z，且当前系统包管理器不受支持，请先手动安装 7z"
+    fi
+
+    command -v 7z >&/dev/null || _error_quit "7z 安装失败，请检查系统包管理器或手动安装"
+}
+
+_install_usage() {
+    cat <<EOF
+Usage:
+  bash install.sh [OPTIONS] [mihomo|clash] [subscription-url|config.yaml]
+
+Options:
+  --background, --batch, --non-interactive
+                      后台安装：不进入交互式 shell，默认不写 shell rc
+  --start             安装后启动内核（后台安装默认开启）
+  --no-start          安装并导入订阅后停止内核
+  --tun, --vpn        安装后开启 Tun/VPN 模式（需要 root 或免密 sudo）
+  --rc                后台安装时仍写入 shell rc
+  --no-rc             跳过写入 shell rc
+  -h, --help          显示帮助信息
+EOF
+}
+
 _parse_args() {
+    CLASH_INSTALL_BATCH=${CLASH_INSTALL_BATCH:-false}
+    CLASH_INSTALL_START=${CLASH_INSTALL_START:-true}
+    CLASH_INSTALL_TUN=${CLASH_INSTALL_TUN:-false}
+    CLASH_INSTALL_RC=${CLASH_INSTALL_RC:-true}
+
     for arg in "$@"; do
         case $arg in
+        -h | --help)
+            _install_usage
+            exit 0
+            ;;
+        --background | --batch | --non-interactive)
+            CLASH_INSTALL_BATCH=true
+            CLASH_INSTALL_START=true
+            CLASH_INSTALL_RC=false
+            ;;
+        --start)
+            CLASH_INSTALL_START=true
+            ;;
+        --no-start)
+            CLASH_INSTALL_START=false
+            ;;
+        --tun | --vpn)
+            CLASH_INSTALL_BATCH=true
+            CLASH_INSTALL_START=true
+            CLASH_INSTALL_TUN=true
+            CLASH_INSTALL_RC=false
+            ;;
+        --rc)
+            CLASH_INSTALL_RC=true
+            ;;
+        --no-rc)
+            CLASH_INSTALL_RC=false
+            ;;
         mihomo)
             KERNEL_NAME=mihomo
             ;;
         clash)
             KERNEL_NAME=clash
             ;;
-        http*)
+        http* | file://* | *.yaml | *.yml | *.YAML | *.YML)
             CLASH_CONFIG_URL=$arg
+            ;;
+        *)
+            [ -f "$arg" ] && CLASH_CONFIG_URL=$arg
             ;;
         esac
     done
@@ -291,7 +372,7 @@ _nohup() {
     # 使用子 shell 启动，确保进程脱离终端
     service_start=('(' nohup "$BIN_KERNEL" -d "$CLASH_RESOURCES_DIR" -f "$CLASH_CONFIG_RUNTIME" '>' "$FILE_LOG" '2>\&1' '\&' ')')
     # sudo 启动：nohup 完全脱离终端，关闭所有标准流
-    service_sudo_start=(sudo sh -c '"nohup' "$BIN_KERNEL" -d "$CLASH_RESOURCES_DIR" -f "$CLASH_CONFIG_RUNTIME" '<' '/dev/null' '>' "$FILE_LOG" '2>\&1' '\&"')
+    service_sudo_start=(_sudo_cmd sh -c '"nohup' "$BIN_KERNEL" -d "$CLASH_RESOURCES_DIR" -f "$CLASH_CONFIG_RUNTIME" '<' '/dev/null' '>' "$FILE_LOG" '2>\&1' '\&"')
     service_status=(pgrep -fa "$BIN_KERNEL")
     service_is_active=(pgrep -fa "$BIN_KERNEL")
     service_stop=(pkill -9 -f "$BIN_KERNEL")
